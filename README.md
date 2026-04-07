@@ -1,5 +1,9 @@
 # Discord Calendar Bot
 
+<p align="center">
+  <img src="assets/icon.png" alt="calendar-bot-by-gd" width="300"/>
+</p>
+
 A simple Discord bot that lets any server member create Google Calendar events via a slash command.
 
 ## Commands
