@@ -4,18 +4,31 @@
   <img src="assets/icon.png" alt="calendar-bot-by-gd" width="300"/>
 </p>
 
-A simple Discord bot that lets any server member create Google Calendar events via a slash command.
+A Discord bot that lets **any user** create events on **their own Google Calendar** directly from Discord — no sharing required.
+
+---
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `/create_event title date time [duration] [description]` | Create a calendar event |
+| `/connect` | Link your personal Google Calendar (one-time per user) |
+| `/create_event` | Create an event on your own Google Calendar |
+| `/disconnect` | Unlink your Google Calendar |
 
 **Example:**
 ```
 /create_event title:Team Standup date:2025-06-15 time:09:00 duration:30 description:Daily sync
 ```
+
+---
+
+## How It Works
+
+1. Each user runs `/connect` → receives a personal Google OAuth link (visible only to them)
+2. User authorizes the bot to access their own Google Calendar
+3. The bot stores their token securely on the server (never shared)
+4. `/create_event` creates the event on **that user's** calendar
 
 ---
 
@@ -26,6 +39,7 @@ A simple Discord bot that lets any server member create Google Calendar events v
 - Python 3.10+
 - A Discord application + bot token
 - A Google Cloud project with the Calendar API enabled
+- A public URL for the OAuth callback (Railway, VPS, or ngrok for local testing)
 
 ---
 
@@ -38,63 +52,64 @@ A simple Discord bot that lets any server member create Google Calendar events v
 
 ---
 
-### 3. Google Calendar API
+### 3. Google OAuth2 Credentials
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/) → New Project.
 2. Enable **Google Calendar API**.
-3. Go to **APIs & Services > Credentials** → Create **OAuth 2.0 Client ID** (Desktop app).
-4. Download the JSON file and save it as `credentials.json` in the project root.
-
-> `credentials.json` is listed in `.gitignore` — never commit it.
+3. Go to **APIs & Services > Credentials** → Create **OAuth 2.0 Client ID**.
+   - Application type: **Web application**
+   - Authorized redirect URI: `https://your-domain.com/oauth/callback`
+4. Copy the **Client ID** and **Client Secret**.
 
 ---
 
 ### 4. Install & Configure
 
 ```bash
-# Clone / enter the repo
 cd discord-calendar-bot
 
-# Create virtual environment
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
 cp .env.example .env
-# Edit .env and set DISCORD_TOKEN and optionally GOOGLE_CALENDAR_ID
+# Edit .env — fill in DISCORD_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, CALLBACK_URL
 ```
 
 ---
 
-### 5. Authenticate with Google (one-time)
+### 5. Run
 
 ```bash
-python -c "from google_calendar import get_calendar_service; get_calendar_service()"
+python main.py
 ```
 
-A browser window will open. Sign in and grant access. This saves `token.json` locally for future runs.
-
-> `token.json` is listed in `.gitignore` — never commit it.
+This starts both the Discord bot and the OAuth callback web server on the configured `PORT`.
 
 ---
 
-### 6. Run the Bot
+### 6. Local Testing with ngrok
+
+If you don't have a public server yet:
 
 ```bash
-python bot.py
+ngrok http 8080
+# Copy the https URL, e.g. https://abc123.ngrok.io
+# Set CALLBACK_URL=https://abc123.ngrok.io in .env
+# Add https://abc123.ngrok.io/oauth/callback to your Google OAuth redirect URIs
 ```
 
 ---
 
 ## Security Notes
 
-- `DISCORD_TOKEN`, `credentials.json`, and `token.json` are **never committed** (enforced by `.gitignore`).
-- All secrets are loaded from environment variables via `.env`.
-- Errors shown to Discord users are generic; full details are only logged server-side.
-- The bot uses the minimum required Google OAuth scope (`calendar.events` write-only).
+- Each user's Google token is stored in `tokens.json` keyed by Discord user ID — never shared between users
+- `tokens.json`, `.env` are in `.gitignore` — never committed
+- All secrets are loaded from environment variables
+- The bot uses the minimum required Google OAuth scope (`calendar.events` — write-only)
+- OAuth state parameter ties the callback to a specific Discord user, preventing token hijacking
+- Error messages shown to users are generic; sensitive details only go to server-side logs
 
 ---
 
@@ -102,10 +117,14 @@ python bot.py
 
 ```
 discord-calendar-bot/
-├── bot.py               # Discord bot + slash command
-├── google_calendar.py   # Google Calendar API wrapper
+├── main.py              # Entry point — runs bot + OAuth web server
+├── bot.py               # Discord slash commands
+├── google_calendar.py   # Google Calendar API + OAuth helpers
+├── storage.py           # Per-user token storage
 ├── requirements.txt
 ├── .env.example         # Template — copy to .env
 ├── .gitignore
+├── assets/
+│   └── icon.png
 └── README.md
 ```
